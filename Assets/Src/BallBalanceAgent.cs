@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
@@ -11,75 +9,72 @@ public class BallBalanceAgent : Agent
     private GameObject Ball;
 
     private Rigidbody BallRB;
-    private EnvironmentParameters DefaultParameters;
 
+    /// <summary>
+    /// 初期化処理　Start()のようなもの
+    /// </summary>
     public override void Initialize()
     {
         this.BallRB = this.Ball.GetComponent<Rigidbody>();
-        this.DefaultParameters = Academy.Instance.EnvironmentParameters;
-        this.ResetScene();
     }
 
+    /// <summary>
+    /// 現在の状態(入力)を取得
+    ///1. Ballの速度(x)
+    ///2. Ballの速度(y)
+    ///3. Ballの速度(z)
+    ///4. Ballの位置(x)
+    ///5. Ballの位置(y)
+    ///6. Ballの位置(z)
+    ///7. Cubeの角度(z)
+    ///8. Cubeの角度(x)
+    /// </summary>
     public override void CollectObservations(VectorSensor sensor)
     {
         sensor.AddObservation(this.BallRB.velocity);
         sensor.AddObservation(this.Ball.transform.position);
         sensor.AddObservation(this.transform.rotation.z);
         sensor.AddObservation(this.transform.rotation.x);
-
     }
 
+    /// <summary>
+    /// Action実行
+    /// </summary>
     public override void OnActionReceived(ActionBuffers actions)
     {
-        var angleZ = 2f * Mathf.Clamp(actions.ContinuousActions.Array[0], -1f, 1f);
-        var angleX = 2f * Mathf.Clamp(actions.ContinuousActions.Array[1], -1f, 1f);
+        //出力層の値を-1~1の範囲に収める
+        var angleZ = actions.ContinuousActions.Array[0];
+        var angleX = actions.ContinuousActions.Array[1];
 
-        if ((this.gameObject.transform.rotation.z < .25f && angleZ > 0f) ||
-            (this.gameObject.transform.rotation.z > -.25 && angleZ < 0f))
-        {
-            this.gameObject.transform.Rotate(new Vector3(0, 0, 1), angleZ);
-        }
-
-        if ((this.gameObject.transform.rotation.x < .25f && angleX > 0f) ||
-            (this.gameObject.transform.rotation.x > -.25 && angleX < 0f))
-        {
-            this.gameObject.transform.Rotate(new Vector3(1, 0, 0), angleX);
-        }
+        //回転
+        this.gameObject.transform.Rotate(new Vector3(angleX, 0, angleZ));
 
         if (Ball.transform.position.y < transform.position.y)
         {
+            //ボールが落ちたらマイナス報酬 & エピソード終了
             this.SetReward(-1f);
             this.EndEpisode();
         }
         else
         {
+            //継続中は常に報酬0.1を与える
             this.SetReward(.1f);
         }
     }
 
-    public override void Heuristic(in ActionBuffers actionsOut)
-    {
-        actionsOut.ContinuousActions.Array[0] = -Input.GetAxis("Horizontal");
-        actionsOut.ContinuousActions.Array[1] = Input.GetAxis("Vertical");
-    }
-
+    /// <summary>
+    /// 各エピソード開始時に呼び出される処理
+    /// </summary>
     public override void OnEpisodeBegin()
     {
-        this.gameObject.transform.rotation = new Quaternion(0f, 0f, 0f, 0f);
-        this.transform.Rotate(new Vector3(1, 0, 0), Random.Range(-10f, 10f));
-        this.transform.Rotate(new Vector3(0, 0, 1), Random.Range(-10f, 10f));
+        var maxCubeRotation = 10f;
+        var maxBallPosition = .15f;
+
+        //Cubeの角度をランダムに初期化
+        this.gameObject.transform.rotation = Quaternion.Euler(Random.Range(-maxCubeRotation, maxCubeRotation), 0, Random.Range(-maxCubeRotation, maxCubeRotation));
+
+        //Ballを停止 & 位置をランダムに初期化
         this.BallRB.velocity = Vector3.zero;
-        this.Ball.transform.position = new Vector3(Random.Range(-.15f, .15f), .6f, Random.Range(-.15f, .15f)) + this.transform.position;
-
-        this.ResetScene();
-
-
-    }
-
-    private void ResetScene()
-    {
-        this.BallRB.mass = DefaultParameters.GetWithDefault("mass", 1.0f);
-        var scale = DefaultParameters.GetWithDefault("scale", 0.1f);
-        Ball.transform.localScale = new Vector3(scale, scale, scale);
+        this.Ball.transform.position = new Vector3(Random.Range(-maxBallPosition, maxBallPosition), .6f, Random.Range(-maxBallPosition, maxBallPosition)) + this.transform.position;
     }
 }
